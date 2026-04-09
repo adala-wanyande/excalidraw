@@ -47,6 +47,7 @@ import { Locker } from "./Locker";
 import { updateBrowserStateVersion } from "./tabSync";
 
 const filesStore = createStore("files-db", "files-store");
+const sceneStore = createStore("scene-db", "scene-store");
 
 export const localStorageQuotaExceededAtom = atom(false);
 
@@ -74,42 +75,66 @@ const saveDataStateToLocalStorage = (
   elements: readonly ExcalidrawElement[],
   appState: AppState,
 ) => {
-  const localStorageQuotaExceeded = appJotaiStore.get(
-    localStorageQuotaExceededAtom,
-  );
-  try {
-    const _appState = clearAppStateForLocalStorage(appState);
+  const _appState = clearAppStateForLocalStorage(appState);
 
-    if (
-      _appState.openSidebar?.name === DEFAULT_SIDEBAR.name &&
-      _appState.openSidebar.tab === CANVAS_SEARCH_TAB
-    ) {
-      _appState.openSidebar = null;
-    }
-
-    localStorage.setItem(
-      STORAGE_KEYS.LOCAL_STORAGE_ELEMENTS,
-      JSON.stringify(getNonDeletedElements(elements)),
-    );
-    localStorage.setItem(
-      STORAGE_KEYS.LOCAL_STORAGE_APP_STATE,
-      JSON.stringify(_appState),
-    );
-    updateBrowserStateVersion(STORAGE_KEYS.VERSION_DATA_STATE);
-    if (localStorageQuotaExceeded) {
-      appJotaiStore.set(localStorageQuotaExceededAtom, false);
-    }
-  } catch (error: any) {
-    // Unable to access window.localStorage
-    console.error(error);
-    if (isQuotaExceededError(error) && !localStorageQuotaExceeded) {
-      appJotaiStore.set(localStorageQuotaExceededAtom, true);
-    }
+  if (
+    _appState.openSidebar?.name === DEFAULT_SIDEBAR.name &&
+    _appState.openSidebar.tab === CANVAS_SEARCH_TAB
+  ) {
+    _appState.openSidebar = null;
   }
+
+  Promise.all([
+    set(
+      STORAGE_KEYS.LOCAL_STORAGE_ELEMENTS,
+      getNonDeletedElements(elements),
+      sceneStore,
+    ),
+    set(STORAGE_KEYS.LOCAL_STORAGE_APP_STATE, _appState, sceneStore),
+  ])
+    .then(() => {
+      updateBrowserStateVersion(STORAGE_KEYS.VERSION_DATA_STATE);
+    })
+    .catch((error: any) => {
+      console.error(error);
+    });
 };
 
-const isQuotaExceededError = (error: any) => {
-  return error instanceof DOMException && error.name === "QuotaExceededError";
+export const importSceneFromIndexedDB = async () => {
+  try {
+    const [elements, appState] = await Promise.all([
+      get<ExcalidrawElement[]>(
+        STORAGE_KEYS.LOCAL_STORAGE_ELEMENTS,
+        sceneStore,
+      ),
+      get<AppState>(STORAGE_KEYS.LOCAL_STORAGE_APP_STATE, sceneStore),
+    ]);
+
+    if (elements != null || appState != null) {
+      return { elements: elements ?? [], appState: appState ?? null };
+    }
+
+    // Migrate from localStorage if IndexedDB is empty
+    const lsElements = localStorage.getItem(STORAGE_KEYS.LOCAL_STORAGE_ELEMENTS);
+    const lsAppState = localStorage.getItem(STORAGE_KEYS.LOCAL_STORAGE_APP_STATE);
+    if (lsElements || lsAppState) {
+      const migratedElements = lsElements ? JSON.parse(lsElements) : [];
+      const migratedAppState = lsAppState ? JSON.parse(lsAppState) : null;
+      // Persist migrated data to IndexedDB, then clear localStorage
+      await Promise.all([
+        set(STORAGE_KEYS.LOCAL_STORAGE_ELEMENTS, migratedElements, sceneStore),
+        set(STORAGE_KEYS.LOCAL_STORAGE_APP_STATE, migratedAppState, sceneStore),
+      ]);
+      localStorage.removeItem(STORAGE_KEYS.LOCAL_STORAGE_ELEMENTS);
+      localStorage.removeItem(STORAGE_KEYS.LOCAL_STORAGE_APP_STATE);
+      return { elements: migratedElements, appState: migratedAppState };
+    }
+
+    return { elements: [], appState: null };
+  } catch (error: any) {
+    console.error(error);
+    return { elements: [], appState: null };
+  }
 };
 
 type SavingLockTypes = "collaboration";
