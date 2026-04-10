@@ -26,7 +26,7 @@ import {
   get,
 } from "idb-keyval";
 
-import { appJotaiStore, atom } from "excalidraw-app/app-jotai";
+import { atom } from "excalidraw-app/app-jotai";
 import { getNonDeletedElements } from "@excalidraw/element";
 
 import type { LibraryPersistedData } from "@excalidraw/excalidraw/data/library";
@@ -103,10 +103,7 @@ const saveDataStateToLocalStorage = (
 export const importSceneFromIndexedDB = async () => {
   try {
     const [elements, appState] = await Promise.all([
-      get<ExcalidrawElement[]>(
-        STORAGE_KEYS.LOCAL_STORAGE_ELEMENTS,
-        sceneStore,
-      ),
+      get<ExcalidrawElement[]>(STORAGE_KEYS.LOCAL_STORAGE_ELEMENTS, sceneStore),
       get<AppState>(STORAGE_KEYS.LOCAL_STORAGE_APP_STATE, sceneStore),
     ]);
 
@@ -115,8 +112,12 @@ export const importSceneFromIndexedDB = async () => {
     }
 
     // Migrate from localStorage if IndexedDB is empty
-    const lsElements = localStorage.getItem(STORAGE_KEYS.LOCAL_STORAGE_ELEMENTS);
-    const lsAppState = localStorage.getItem(STORAGE_KEYS.LOCAL_STORAGE_APP_STATE);
+    const lsElements = localStorage.getItem(
+      STORAGE_KEYS.LOCAL_STORAGE_ELEMENTS,
+    );
+    const lsAppState = localStorage.getItem(
+      STORAGE_KEYS.LOCAL_STORAGE_APP_STATE,
+    );
     if (lsElements || lsAppState) {
       const migratedElements = lsElements ? JSON.parse(lsElements) : [];
       const migratedAppState = lsAppState ? JSON.parse(lsAppState) : null;

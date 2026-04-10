@@ -7,6 +7,7 @@ import type { ExcalidrawElement } from "@excalidraw/element/types";
 import type { AppState } from "@excalidraw/excalidraw/types";
 
 import { STORAGE_KEYS } from "../app_constants";
+
 import { importSceneFromIndexedDB } from "./LocalData";
 
 export const saveUsernameToLocalStorage = (username: string) => {
